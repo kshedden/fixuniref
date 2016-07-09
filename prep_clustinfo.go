@@ -1,16 +1,17 @@
 package main
 
-// Restructure the "cluster information" file into a JSON objct for
-// each unique cluster id containing three lists: PID's, Taxa, and
-// Functions.
+// Restructure the "cluster information" file into a struct for each
+// unique cluster id containing the cluster id and three lists: PID's,
+// Taxa, and Functions.
 //
-// Each row of the output file contains the cluster id, then a tab,
-// then the JSON-encoded lists.
+// The output file is a sequence of Gob-encoded structs as defined
+// above.
 
 import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"sort"
@@ -19,10 +20,10 @@ import (
 
 var (
 	// File path for input cluster information file
-	cluster_info_file = "/nfs/kshedden/Teal_Furnholm/7-7-2016/clusterinfo.dat.gz"
+	cluster_info_file string
 
 	// File path for output JSON file
-	outfile = "/nfs/kshedden/Teal_Furnholm/7-7-2016/clusterinfo.json.gz"
+	outfile string
 
 	// If positive, process only this many lines of the
 	// cluster_info_file
@@ -33,6 +34,7 @@ var (
 )
 
 type clustrec struct {
+	Id  string
 	Pid []string
 	Tax []string
 	Fnc []string
@@ -74,6 +76,7 @@ func process_clustinfo() {
 		if !ok {
 			// First time seeing this cluster
 			rec = new(clustrec)
+			rec.Id = id
 			clustinfo[id] = rec
 		}
 
@@ -99,7 +102,7 @@ func process_clustinfo() {
 			fmt.Printf(" %.1f%% ", pread)
 		}
 	}
-	fmt.Printf(" ...done\n")
+	fmt.Printf(" done\n")
 }
 
 // Return the unique elements of an array of strings.
@@ -124,16 +127,21 @@ func unique(x []string) []string {
 
 func main() {
 
+	// Read flags
+	flag.StringVar(&cluster_info_file, "cluster", "", "raw cluster information input file path")
+	flag.StringVar(&outfile, "output", "", "output file path for restructured cluster information")
+	flag.Parse()
+
 	process_clustinfo()
 
-	fmt.Printf("Sorting...\n")
+	fmt.Printf("Dropping duplicates...\n")
 	for _, v := range clustinfo {
 		v.Pid = unique(v.Pid)
 		v.Tax = unique(v.Tax)
 		v.Fnc = unique(v.Fnc)
 	}
 
-	fmt.Printf("Writing to disk...\n")
+	fmt.Printf("Writing to disk... ")
 	fid, err := os.Create(outfile)
 	if err != nil {
 		panic(err)
@@ -142,23 +150,20 @@ func main() {
 	wtr := gzip.NewWriter(fid)
 	defer wtr.Close()
 
-	ar := make([]string, len(clustinfo))
-	jj := 0
-	for k, _ := range clustinfo {
-		ar[jj] = k
-		jj++
-	}
-	sort.StringSlice(ar).Sort()
-
 	enc := json.NewEncoder(wtr)
-	for _, v := range ar {
-		// Mixing calls to Encode and underlying writer seems
-		// OK
-		wtr.Write([]byte(v))
-		wtr.Write([]byte("\t"))
-		err = enc.Encode(clustinfo[v])
+	jj := 0
+	for _, v := range clustinfo {
+		err = enc.Encode(v)
 		if err != nil {
 			panic(err)
 		}
+
+		// Progress message
+		if jj%1000000 == 0 {
+			pd := 100 * float64(jj) / float64(len(clustinfo))
+			fmt.Printf("%.0f%% ", pd)
+		}
+		jj++
 	}
+	fmt.Printf(" done\n")
 }

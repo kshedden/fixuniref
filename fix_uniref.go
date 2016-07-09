@@ -1,6 +1,6 @@
 package main
 
-// Takes a uniref file as input and returns a modifie file in which
+// Takes a uniref file as input and returns a modified file in which
 // the functions, taxa, and PID elements are extended to include all
 // elements in the same cluster. [TODO: clearer description]
 
@@ -8,7 +8,9 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
+	"flag"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -19,13 +21,13 @@ type empty_t struct{}
 var (
 	// A structured version of the cluster information, produced
 	// by the prep_custinfo script.
-	cluster_info_file = "/nfs/kshedden/Teal_Furnholm/7-7-2016/clusterinfo.json.gz"
+	cluster_info_file string
 
 	// The raw UNIREF data
-	uniref_file = "/nfs/kshedden/Teal_Furnholm/7-7-2016/uniref-all.tab.gz"
+	uniref_file string
 
 	// The output path for the processed UNIREF data
-	outfile = "/nfs/kshedden/Teal_Furnholm/7-7-2016/uniref_new.tsv.gz"
+	outfile string
 
 	// If trunacte is positive, only this many lines are read from the uniref file
 	uniref_truncate int = 0
@@ -36,6 +38,13 @@ var (
 	empty     struct{}
 	clustinfo map[string]*clustrec
 )
+
+type clustrecid struct {
+	Id  string
+	Pid []string
+	Tax []string
+	Fnc []string
+}
 
 type clustrec struct {
 	Pid []string
@@ -54,7 +63,7 @@ func read_clustinfo() {
 	clustinfo = make(map[string]*clustrec)
 
 	fmt.Printf("Reading cluster information...")
-	defer func() { fmt.Printf("Done\n") }()
+	defer func() { fmt.Printf(" done\n") }()
 
 	fid, err := os.Open(cluster_info_file)
 	if err != nil {
@@ -67,30 +76,54 @@ func read_clustinfo() {
 	}
 	defer rdr.Close()
 
-	scanner := bufio.NewScanner(rdr)
-	var tks int = 1e6
-	scanner.Buffer(make([]byte, tks), tks)
+	// Get the file size so we can write progress reports
+	finfo, err := fid.Stat()
+	if err != nil {
+		panic(err)
+	}
+	fsize := finfo.Size()
+
+	dec := json.NewDecoder(rdr)
 
 	lines_read := 0
-	for scanner.Scan() {
-		line := scanner.Text()
+	for {
+		var idrec clustrecid
+		err = dec.Decode(&idrec)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			panic(err)
+		}
+
+		id := idrec.Id
+		rec := &clustrec{Pid: idrec.Pid, Fnc: idrec.Fnc, Tax: idrec.Tax}
+		clustinfo[id] = rec
+
 		lines_read++
 		if (clustinfo_truncate > 0) && (lines_read > clustinfo_truncate) {
 			return
 		}
 
-		rec := strings.Split(line, "\t")
-		cid := rec[0]
-		crec := new(clustrec)
-		err = json.Unmarshal([]byte(rec[1]), crec)
-		if err != nil {
-			panic(err)
+		// Progress report
+		if lines_read%1000000 == 0 {
+			pos, err := fid.Seek(0, 1)
+			if err != nil {
+				panic(err)
+			}
+			pread := 100 * float64(pos) / float64(fsize)
+			fmt.Printf(" %.1f%% ", pread)
 		}
-		clustinfo[cid] = crec
 	}
 }
 
 func main() {
+
+	// Read flags
+	flag.StringVar(&cluster_info_file, "cluster", "", "restructured cluster information input file path")
+	flag.StringVar(&uniref_file, "uniref", "", "raw uniref input file path")
+	flag.StringVar(&outfile, "output", "", "output file path for revised uniref file")
+	flag.Parse()
 
 	read_clustinfo()
 
@@ -131,7 +164,7 @@ func main() {
 
 	// Read through the uniref file one line at a time
 	lines_read := 0
-	fmt.Printf("Scanning uniref... ")
+	fmt.Printf("Processing uniref... ")
 	for scanner.Scan() {
 
 		line := scanner.Text()
@@ -144,7 +177,7 @@ func main() {
 		fields := strings.Split(line, "\t")
 
 		// Progress report
-		if lines_read%100000 == 0 {
+		if lines_read%1000000 == 0 {
 			pos, err := fid.Seek(0, 1)
 			if err != nil {
 				panic(err)
