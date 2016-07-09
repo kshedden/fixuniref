@@ -1,15 +1,28 @@
+Download the two Go scripts and the Makefile, and put them into a
+directory somewhere.
 
-Download the two scripts and edit the path variables:
+Edit the path and file name variables in the Makefile as neeed.  The
+variables that can be edited are:
 
-In `prep_clustinfo.go`, edit: `cluster_info_file`, `outfile`
+`path`, `raw_cluster_info_file`, `rev_cluster_info_file`,
+`raw_uniref_file`, `rev_uniref_file`.
 
-In `fixuniref.go`, edit: `cluster_info_file`, `uniref_file`, `outfile`
+Run `make all` to build everything.
 
-Note that `outfile` in `prep_clustinfo.go` must be the same as
-`cluster_info_file` in `fixuniref.go`.
+This requires Go version 1.5 or greater since we are using
+`bufio.Scanner.Buffer`.  Use `go version` to check the version.
 
-Then run `prep_clustinfo`, then run `fix_uniref`, e.g.
+Details:
 
-`> go run prep_clustinfo.go`
+Run `make clean` to remove all constructed data files.  Run `make
+clean_clustinfo` to remove only the constructed cluster information,
+and `make clean_uniref` to remove only the constructed uniref file.
 
-`> go run fixuniref.go`
+Run `make clustinfo` to build only the cluster information file, and
+run `make uniref` to build only the revised uniref file.
+
+The Go scripts can be run directly without using the Makefile:
+
+`> go run prep_clustinfo.go -cluster=/nfs/kshedden/Teal_Furnholm/FixUniref/clusterinfo.dat.gz -output=/nfs/kshedden/Teal_Furnholm/FixUniref/clusterinfo.json.gz`
+
+`> go run fix_uniref.go -cluster=/nfs/kshedden/Teal_Furnholm/FixUniref/clusterinfo.json.gz -uniref=/nfs/kshedden/Teal_Furnholm/FixUniref/uniref-all.tab.gz -output=/nfs/kshedden/Teal_Furnholm/FixUniref/uniref-new.tsv.gz`
