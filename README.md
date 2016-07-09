@@ -8,4 +8,8 @@ In `fixuniref.go`, edit: `cluster_info_file`, `uniref_file`, `outfile`
 Note that `outfile` in `prep_clustinfo.go` must be the same as
 `cluster_info_file` in `fixuniref.go`.
 
-Then run `prep_clustinfo`, then run `fix_uniref`.
+Then run `prep_clustinfo`, then run `fix_uniref`, e.g.
+
+`> go run prep_clustinfo.go`
+
+`> go run fixuniref.go`
